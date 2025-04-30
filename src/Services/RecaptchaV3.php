@@ -3,7 +3,7 @@
 namespace Anakadote\StatamicRecaptcha\Services;
 
 use Illuminate\Support\Facades\Log;
-    
+
 class RecaptchaV3
 {
     /**
@@ -18,10 +18,16 @@ class RecaptchaV3
     {
         $threshold = $threshold ?? .5; // In case null is provided for the threshold.
 
+        $remoteip = match (true) {
+            ! empty($_SERVER['X_FORWARDED_FOR']) => trim(explode(',', $_SERVER['X_FORWARDED_FOR'])[0]),
+            ! empty($_SERVER['REMOTE_ADDR']) => $_SERVER['REMOTE_ADDR'],
+            default => null
+        };
+
         $args = [
             'secret'   => config('recaptcha.recaptcha_v3.secret_key'),
             'response' => $token,
-            'remoteip' => $_SERVER['REMOTE_ADDR'] ?? null,
+            'remoteip' => $remoteip,
         ];
 
         $url = 'https://www.google.com/recaptcha/api/siteverify?' . http_build_query($args);
@@ -35,9 +41,9 @@ class RecaptchaV3
         $result = json_decode($output);
 
         if (
-            ! $result || 
-            ! $result->success || 
-            $result->score < $threshold || 
+            ! $result ||
+            ! $result->success ||
+            $result->score < $threshold ||
             $result->action !== $action
         ) {
             if (config('recaptcha.log_failures', true)) {
