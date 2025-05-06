@@ -8,23 +8,38 @@ if (window.recaptchaV3) {
     console.warn('A RECAPTCHA_V3_SITE_KEY has not been set in .env')
   }
 
-  // reCAPTCHA v3
-  const recaptchaScript = document.createElement('script')
-  document.head.appendChild(recaptchaScript)
-  recaptchaScript.type = 'text/javascript'
-  recaptchaScript.src = '//www.google.com/recaptcha/api.js?render=' + window.recaptchaV3.siteKey
-  recaptchaScript.onload = initRecaptcha
-
   // Axios.js
   if (typeof axios == 'undefined') {
     const axiosScript = document.createElement('script')
-    document.head.appendChild(axiosScript)
     axiosScript.type = 'text/javascript'
     axiosScript.src = '//cdnjs.cloudflare.com/ajax/libs/axios/1.6.7/axios.min.js'
+    axiosScript.onload = onAxiosLoad
+    document.head.appendChild(axiosScript)
+  } else{
+    onAxiosLoad()
+  }
+
+  function onAxiosLoad() {
+    // reCAPTCHA v3
+    const recaptchaScript = document.createElement('script')
+    recaptchaScript.type = 'text/javascript'
+    recaptchaScript.src = '//www.google.com/recaptcha/api.js?render=' + window.recaptchaV3.siteKey
+    recaptchaScript.onload = onRecaptchaLoad
+    document.head.appendChild(recaptchaScript)
+  }
+
+  function onRecaptchaLoad() {
+    axios.get('/csrf-token', {
+      withXSRFToken: false
+    })
+      .then(function (response) {
+        sessionStorage.setItem('csrf-token', response.data.token)
+        initRecaptcha(response.data.token)
+      })
   }
 
   // reCAPTCHA is ready.
-  function initRecaptcha() {
+  function initRecaptcha(csrf) {
     grecaptcha.ready(function() {
       const verifyUrl = '/!/statamic-recaptcha/verify-recaptcha-v3-token'
 
@@ -36,7 +51,11 @@ if (window.recaptchaV3) {
         grecaptcha.execute(window.recaptchaV3.siteKey, {action: 'pageload/' + window.recaptchaV3.action})
           .then(function(token) {
 
-            axios.post(verifyUrl, {token: token, action: 'pageload/' + window.recaptchaV3.action})
+            axios.post(
+              verifyUrl,
+              {token: token, action: 'pageload/' + window.recaptchaV3.action},
+              {headers: {'X-CSRF-TOKEN': csrf}}
+            )
               .then(function(response) {
                 attachRecaptchaToForms()
               })
